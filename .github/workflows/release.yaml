@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            binary: netbird-pam-x86_64
+          - goarch: arm64
+            binary: netbird-pam-aarch64
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build ${{ matrix.binary }}
+        env:
+          NETBIRD_TOKEN: ${{ secrets.NETBIRD_TOKEN }}
+          NETBIRD_API: ${{ vars.NETBIRD_MANAGEMENT_URL }}
+          NETBIRD_IP_PREFIX: ${{ vars.NETBIRD_IP_PREFIX }}
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} go build \
+            -ldflags "-s -w \
+              -X main.netbirdToken=${NETBIRD_TOKEN} \
+              -X main.netbirdAPI=${NETBIRD_API} \
+              -X main.netbirdPrefix=${NETBIRD_IP_PREFIX}" \
+            -o ${{ matrix.binary }} \
+            ./main.go
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: ${{ matrix.binary }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: |
+            netbird-pam-x86_64/netbird-pam-x86_64
+            netbird-pam-aarch64/netbird-pam-aarch64
