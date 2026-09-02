@@ -61,9 +61,9 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o netbird-pam-aarch64 .
 ## Installation
 
 ```bash
-sudo cp netbird-pam-x86_64 /usr/local/bin/netbird-pam
-sudo chown root:root /usr/local/bin/netbird-pam
-sudo chmod 755 /usr/local/bin/netbird-pam
+sudo cp netbird-pam-x86_64 /usr/local/lib/netbird-pam
+sudo chown root:root /usr/local/lib/netbird-pam
+sudo chmod 755 /usr/local/lib/netbird-pam
 ```
 
 ## PAM configuration
@@ -71,7 +71,7 @@ sudo chmod 755 /usr/local/bin/netbird-pam
 Add to `/etc/pam.d/login` **before** `@include common-auth`:
 
 ```
-auth required pam_exec.so /usr/local/bin/netbird-pam
+auth required pam_exec.so /usr/local/lib/netbird-pam
 ```
 
 
