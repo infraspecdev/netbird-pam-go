@@ -9,9 +9,11 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
-// set via -ldflags at build time
+// loaded from config path at runtime
 var (
 	netbirdToken  string
 	netbirdAPI    string
@@ -19,6 +21,7 @@ var (
 )
 
 const (
+	configPath = "/etc/netbird-pam/config.env"
 	pamSuccess = 0
 	pamDeny    = 1
 )
@@ -54,6 +57,32 @@ func logf(priority syslog.Priority, format string, args ...any) {
 		logger.Err(msg)
 	default:
 		logger.Info(msg)
+	}
+}
+
+func loadConfig() {
+	if err := godotenv.Load(configPath); err != nil {
+		logf(syslog.LOG_ERR, "failed to load config %s: %v", configPath, err)
+		os.Exit(pamDeny)
+	}
+
+	netbirdToken = os.Getenv("NETBIRD_PAM_TOKEN")
+	netbirdAPI = os.Getenv("NETBIRD_PAM_API_URL")
+	netbirdPrefix = os.Getenv("NETBIRD_PAM_IP_PREFIX")
+
+	var missing []string
+	if netbirdToken == "" {
+		missing = append(missing, "NETBIRD_PAM_TOKEN")
+	}
+	if netbirdAPI == "" {
+		missing = append(missing, "NETBIRD_PAM_API_URL")
+	}
+	if netbirdPrefix == "" {
+		missing = append(missing, "NETBIRD_PAM_IP_PREFIX")
+	}
+	if len(missing) > 0 {
+		logf(syslog.LOG_ERR, "missing required config keys: %s", strings.Join(missing, ", "))
+		os.Exit(pamDeny)
 	}
 }
 
@@ -99,6 +128,8 @@ func main() {
 		logf(syslog.LOG_INFO, "non-netbird source %q, skipping", sourceIP)
 		os.Exit(pamSuccess)
 	}
+
+	loadConfig()
 
 	var peers []Peer
 	if err := apiGet("/api/peers?ip="+sourceIP, &peers); err != nil {
