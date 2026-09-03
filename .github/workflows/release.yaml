@@ -27,16 +27,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Build ${{ matrix.binary }}
-        env:
-          NETBIRD_TOKEN: ${{ secrets.NETBIRD_TOKEN }}
-          NETBIRD_API: ${{ vars.NETBIRD_MANAGEMENT_URL }}
-          NETBIRD_IP_PREFIX: ${{ vars.NETBIRD_IP_PREFIX }}
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} go build \
-            -ldflags "-s -w \
-              -X main.netbirdToken=${NETBIRD_TOKEN} \
-              -X main.netbirdAPI=${NETBIRD_API} \
-              -X main.netbirdPrefix=${NETBIRD_IP_PREFIX}" \
+            -ldflags "-s -w" \
             -o ${{ matrix.binary }} \
             ./main.go
 
