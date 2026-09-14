@@ -39,19 +39,23 @@ func TestMatchUser(t *testing.T) {
 		userID        string
 		requestedUser string
 		want          bool
+		matchedUser   string
 	}{
-		{"exact match with dot conversion", "u1", "alice-smith", true},
-		{"exact match no dots", "u2", "bob", true},
-		{"wrong username for user", "u1", "alice", false},
-		{"impersonation attempt", "u1", "bob", false},
-		{"userID not in list", "u99", "alice-smith", false},
-		{"empty user list", "", "alice", false},
+		{"exact match with dot conversion", "u1", "alice-smith", true, "alice-smith"},
+		{"exact match no dots", "u2", "bob", true, "bob"},
+		{"wrong username for user", "u1", "alice", false, "alice-smith"},
+		{"impersonation attempt", "u1", "bob", false, "alice-smith"},
+		{"userID not in list", "u99", "alice-smith", false, ""},
+		{"empty user list", "", "alice", false, ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := username.MatchUser(users, tc.userID, tc.requestedUser)
+			matched, got := username.MatchUser(users, tc.userID, tc.requestedUser)
 			if got != tc.want {
 				t.Errorf("matchUser(%q, %q) = %v, want %v", tc.userID, tc.requestedUser, got, tc.want)
+			}
+			if matched != tc.matchedUser {
+				t.Errorf("matchUser(%q, %q) returned user %q, want %q", tc.userID, tc.requestedUser, matched, tc.matchedUser)
 			}
 		})
 	}

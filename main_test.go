@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,27 @@ func TestMain(m *testing.M) {
 	configPath = f.Name()
 	defer os.Remove(f.Name())
 	os.Exit(m.Run())
+}
+
+func TestIsNetbirdSource(t *testing.T) {
+	tests := []struct {
+		name string
+		ip   string
+		want bool
+	}{
+		{name: "ipv4 netbird prefix", ip: "100.99.1.2", want: true},
+		{name: "ipv6 netbird prefix", ip: "fdc1:f44a:39d9:c331::2", want: true},
+		{name: "other ipv4", ip: "192.168.1.1", want: false},
+		{name: "other ipv6", ip: "2001:4860:4860::8888", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isNetbirdSource(tt.ip); got != tt.want {
+				t.Fatalf("isNetbirdSource(%q) = %v, want %v", tt.ip, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestAuthorize_NonNetbirdIP(t *testing.T) {
@@ -136,6 +158,25 @@ func TestAuthorize_UserIDNotInList(t *testing.T) {
 	result := Authorize("100.99.1.2", "alice", srv.Client())
 	if result != pamDeny {
 		t.Errorf("expected pamDeny when userID not in users list, got %d", result)
+	}
+}
+
+func TestAuthLogMessage(t *testing.T) {
+	msg := authLogMessage(true, "100.99.1.2", "alice-smith", "username-matched-netbird-peer userID=u1 matchedUser=alice-smith")
+	if !strings.Contains(msg, "allowing") && !strings.Contains(msg, "denying") {
+		t.Fatalf("log message missing decision: %q", msg)
+	}
+	if !strings.Contains(msg, "sourceIP=100.99.1.2") {
+		t.Fatalf("log message missing source IP: %q", msg)
+	}
+	if !strings.Contains(msg, "requestedUser=alice-smith") {
+		t.Fatalf("log message missing requested user: %q", msg)
+	}
+	if !strings.Contains(msg, "reason") {
+		t.Fatalf("log message missing reason: %q", msg)
+	}
+	if !strings.Contains(msg, "matchedUser=alice-smith") {
+		t.Fatalf("log message missing matched user: %q", msg)
 	}
 }
 

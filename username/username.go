@@ -11,11 +11,12 @@ func SanitizeUsername(email string) string {
 	return strings.ReplaceAll(local, ".", "-")
 }
 
-func MatchUser(users []api.User, userID, requestedUser string) bool {
+func MatchUser(users []api.User, userID, requestedUser string) (string, bool) {
 	for _, u := range users {
 		if u.ID == userID {
-			return SanitizeUsername(u.Email) == requestedUser
+			matchedUser := SanitizeUsername(u.Email)
+			return matchedUser, matchedUser == requestedUser
 		}
 	}
-	return false
+	return "", false
 }

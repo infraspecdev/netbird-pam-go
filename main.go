@@ -17,10 +17,23 @@ import (
 var configPath = "/etc/netbird-pam/config.env"
 
 const (
-	netbirdPrefix = "100."
-	pamSuccess    = 0
-	pamDeny       = 1
+	pamSuccess = 0
+	pamDeny    = 1
 )
+
+var netbirdPrefixes = []string{
+	"100.99.",
+	"fdc1:f44a:39d9:c331:",
+}
+
+func isNetbirdSource(sourceIP string) bool {
+	for _, prefix := range netbirdPrefixes {
+		if strings.HasPrefix(sourceIP, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 var logger *syslog.Writer
 
@@ -30,6 +43,25 @@ func initLogger() {
 	if err != nil {
 		os.Exit(pamSuccess)
 	}
+}
+
+func authLogMessage(allowed bool, sourceIP, requestedUser, reason string) string {
+	decision := "allowing"
+	if !allowed {
+		decision = "denying"
+	}
+	return fmt.Sprintf("%s: sourceIP=%s requestedUser=%s reason=%s", decision, sourceIP, requestedUser, reason)
+}
+
+func audit(allowed bool, sourceIP, requestedUser, reason string) int {
+	msg := authLogMessage(allowed, sourceIP, requestedUser, reason)
+
+	if allowed {
+		logger.Info(msg)
+		return pamSuccess
+	}
+	logger.Warning(msg)
+	return pamDeny
 }
 
 func loadConfig() (token, mgmtURL string, err error) {
@@ -47,44 +79,38 @@ func loadConfig() (token, mgmtURL string, err error) {
 func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 	ctx := context.Background()
 
-	if !strings.HasPrefix(sourceIP, netbirdPrefix) {
-		logger.Info("non-netbird source " + sourceIP + ", allowing")
-		return pamSuccess
+	if !isNetbirdSource(sourceIP) {
+		return audit(true, sourceIP, requestedUser, "non-netbird-source")
 	}
 
 	token, mgmtURL, err := loadConfig()
 	if err != nil {
-		logger.Err("config load failed, denying: " + err.Error())
-		return pamDeny
+		return audit(false, sourceIP, requestedUser, fmt.Sprintf("config-load-failed err=%v", err))
 	}
 
 	apiClient := api.NewClient(client, mgmtURL, token)
 
 	peers, err := apiClient.FetchPeers(ctx, sourceIP)
 	if err != nil || len(peers) == 0 {
-		logger.Warning("no peer found for IP " + sourceIP + ", denying")
-		return pamDeny
+		return audit(false, sourceIP, requestedUser, fmt.Sprintf("no-peer-found err=%v", err))
 	}
 
 	userID := peers[0].UserID
 	if userID == "" {
-		logger.Warning("peer has no user_id for IP " + sourceIP + ", denying")
-		return pamDeny
+		return audit(false, sourceIP, requestedUser, "peer-has-no-user-id")
 	}
 
 	users, err := apiClient.FetchUsers(ctx)
 	if err != nil {
-		logger.Err("users fetch failed, denying")
-		return pamDeny
+		return audit(false, sourceIP, requestedUser, fmt.Sprintf("users-fetch-failed err=%v", err))
 	}
 
-	if !username.MatchUser(users, userID, requestedUser) {
-		logger.Warning("username match failed for user " + requestedUser + " from IP " + sourceIP + ", denying")
-		return pamDeny
+	matchedUser, ok := username.MatchUser(users, userID, requestedUser)
+	if !ok {
+		return audit(false, sourceIP, requestedUser, fmt.Sprintf("username-mismatch userID=%s matchedUser=%q", userID, matchedUser))
 	}
 
-	logger.Info("allowed " + requestedUser + " from " + sourceIP)
-	return pamSuccess
+	return audit(true, sourceIP, requestedUser, fmt.Sprintf("username-matched-netbird-peer userID=%s matchedUser=%q", userID, matchedUser))
 }
 
 func main() {
