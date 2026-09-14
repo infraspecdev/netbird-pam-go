@@ -48,7 +48,7 @@ func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 	ctx := context.Background()
 
 	if !strings.HasPrefix(sourceIP, netbirdPrefix) {
-		logger.Info("non-netbird source, allowing")
+		logger.Info("non-netbird source " + sourceIP + ", allowing")
 		return pamSuccess
 	}
 
@@ -62,13 +62,13 @@ func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 
 	peers, err := apiClient.FetchPeers(ctx, sourceIP)
 	if err != nil || len(peers) == 0 {
-		logger.Warning("no peer found for IP, denying")
+		logger.Warning("no peer found for IP " + sourceIP + ", denying")
 		return pamDeny
 	}
 
 	userID := peers[0].UserID
 	if userID == "" {
-		logger.Warning("peer has no user_id, denying")
+		logger.Warning("peer has no user_id for IP " + sourceIP + ", denying")
 		return pamDeny
 	}
 
@@ -79,7 +79,7 @@ func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 	}
 
 	if !username.MatchUser(users, userID, requestedUser) {
-		logger.Warning("username match failed, denying")
+		logger.Warning("username match failed for user " + requestedUser + " from IP " + sourceIP + ", denying")
 		return pamDeny
 	}
 
