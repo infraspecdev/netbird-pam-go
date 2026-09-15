@@ -162,7 +162,7 @@ func TestAuthorize_UserIDNotInList(t *testing.T) {
 }
 
 func TestAuthLogMessage(t *testing.T) {
-	msg := authLogMessage(true, "100.99.1.2", "alice-smith", "username-matched-netbird-peer userID=u1 matchedUser=alice-smith")
+	msg := authLogMessage(true, "100.99.1.2", "alice-smith", "username-matched-netbird-peer matchedUser=alice-smith")
 	if !strings.Contains(msg, "allowing") && !strings.Contains(msg, "denying") {
 		t.Fatalf("log message missing decision: %q", msg)
 	}

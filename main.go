@@ -107,10 +107,10 @@ func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 
 	matchedUser, ok := username.MatchUser(users, userID, requestedUser)
 	if !ok {
-		return audit(false, sourceIP, requestedUser, fmt.Sprintf("username-mismatch userID=%s matchedUser=%q", userID, matchedUser))
+		return audit(false, sourceIP, requestedUser, fmt.Sprintf("username-mismatch matchedUser=%q", matchedUser))
 	}
 
-	return audit(true, sourceIP, requestedUser, fmt.Sprintf("username-matched-netbird-peer userID=%s matchedUser=%q", userID, matchedUser))
+	return audit(true, sourceIP, requestedUser, fmt.Sprintf("username-matched-netbird-peer matchedUser=%q", matchedUser))
 }
 
 func main() {
