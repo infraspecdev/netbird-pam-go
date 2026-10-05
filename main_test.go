@@ -196,3 +196,37 @@ func TestAuthorize_Timeout(t *testing.T) {
 		t.Errorf("expected pamDeny on timeout, got %d", result)
 	}
 }
+
+func TestAPIFailureReason(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "unauthorized", err: &api.StatusError{Path: "/api/peers", StatusCode: http.StatusUnauthorized}, want: "netbird-api-unauthorized call=fetch-peers"},
+		{name: "forbidden", err: &api.StatusError{Path: "/api/peers", StatusCode: http.StatusForbidden}, want: "netbird-api-forbidden call=fetch-peers"},
+		{name: "server error", err: &api.StatusError{Path: "/api/peers", StatusCode: http.StatusBadGateway}, want: "netbird-api-failed call=fetch-peers"},
+		{name: "network error", err: fmt.Errorf("dial tcp: connection refused"), want: "netbird-api-failed call=fetch-peers"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := apiFailureReason("fetch-peers", tt.err); !strings.HasPrefix(got, tt.want) {
+				t.Fatalf("apiFailureReason() = %q, want prefix %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAuthorize_Unauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	useServer(t, srv)
+
+	result := Authorize("100.99.1.2", "alice", srv.Client())
+	if result != pamDeny {
+		t.Errorf("expected pamDeny on 401, got %d", result)
+	}
+}

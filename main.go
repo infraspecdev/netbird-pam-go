@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/syslog"
 	"net/http"
@@ -76,6 +77,23 @@ func loadConfig() (token, mgmtURL string, err error) {
 	return
 }
 
+// apiFailureReason turns a NetBird API error into an audit reason that says
+// what to fix: a bad token (401), a token whose role can't read the resource
+// (403), or anything else (network, timeout, 5xx).
+func apiFailureReason(call string, err error) string {
+	if statusErr, ok := errors.AsType[*api.StatusError](err); ok {
+		switch statusErr.StatusCode {
+		case http.StatusUnauthorized:
+			return fmt.Sprintf("netbird-api-unauthorized call=%s hint=%q err=%v", call,
+				"NETBIRD_TOKEN was rejected: expired, revoked, or from a different management server", err)
+		case http.StatusForbidden:
+			return fmt.Sprintf("netbird-api-forbidden call=%s hint=%q err=%v", call,
+				"NETBIRD_TOKEN is valid but its role cannot read peers/users", err)
+		}
+	}
+	return fmt.Sprintf("netbird-api-failed call=%s err=%v", call, err)
+}
+
 func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 	ctx := context.Background()
 
@@ -91,8 +109,11 @@ func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 	apiClient := api.NewClient(client, mgmtURL, token)
 
 	peers, err := apiClient.FetchPeers(ctx, sourceIP)
-	if err != nil || len(peers) == 0 {
-		return audit(false, sourceIP, requestedUser, fmt.Sprintf("no-peer-found err=%v", err))
+	if err != nil {
+		return audit(false, sourceIP, requestedUser, apiFailureReason("fetch-peers", err))
+	}
+	if len(peers) == 0 {
+		return audit(false, sourceIP, requestedUser, "no-peer-found")
 	}
 
 	userID := peers[0].UserID
@@ -102,7 +123,7 @@ func Authorize(sourceIP, requestedUser string, client *http.Client) int {
 
 	users, err := apiClient.FetchUsers(ctx)
 	if err != nil {
-		return audit(false, sourceIP, requestedUser, fmt.Sprintf("users-fetch-failed err=%v", err))
+		return audit(false, sourceIP, requestedUser, apiFailureReason("fetch-users", err))
 	}
 
 	matchedUser, ok := username.MatchUser(users, userID, requestedUser)
