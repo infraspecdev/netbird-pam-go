@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Peer struct {
@@ -17,6 +19,20 @@ type Peer struct {
 type User struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
+}
+
+type StatusError struct {
+	Path       string
+	StatusCode int
+	Body       string
+}
+
+func (e *StatusError) Error() string {
+	msg := fmt.Sprintf("GET %s returned %d %s", e.Path, e.StatusCode, http.StatusText(e.StatusCode))
+	if e.Body != "" {
+		msg += ": " + e.Body
+	}
+	return msg
 }
 
 type Client struct {
@@ -51,7 +67,12 @@ func (c *Client) fetch(ctx context.Context, path string, out any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return &StatusError{
+			Path:       path,
+			StatusCode: resp.StatusCode,
+			Body:       strings.TrimSpace(string(body)),
+		}
 	}
 
 	return json.NewDecoder(resp.Body).Decode(out)

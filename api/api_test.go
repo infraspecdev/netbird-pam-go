@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,13 +38,21 @@ func TestFetchPeers_Success(t *testing.T) {
 func TestFetchPeers_NonOK(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"message":"token invalid"}`))
 	}))
 	defer srv.Close()
 
 	client := api.NewClient(srv.Client(), srv.URL, "test-token")
 	_, err := client.FetchPeers(context.Background(), "100.99.1.2")
-	if err == nil {
-		t.Fatal("expected error for non-200 status")
+	var statusErr *api.StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("expected *api.StatusError, got %v", err)
+	}
+	if statusErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", statusErr.StatusCode)
+	}
+	if statusErr.Body != `{"message":"token invalid"}` {
+		t.Errorf("expected response body in error, got %q", statusErr.Body)
 	}
 }
 
